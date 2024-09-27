@@ -9,6 +9,10 @@
 #include <asm/uaccess.h>
 #include <linux/tty.h>
 #include <linux/sched.h>
+#include <linux/interrupt.h>
+#include <linux/delay.h>
+
+
 //#include <sys/io.h>
 //#include <sys/ddi.h>
 
@@ -32,12 +36,21 @@ static struct proc_dir_entry *proc_entry;
 
 static struct proc_dir_entry *proc_keyboard_entry;
 
+static irqreturn_t keyboard_interrupt(int irq, void *dev_id);
+
+char c;
+int char_flag = 0;
+
+
 static int __init initialization_routine(void) {
 
+  int result;
   printk("<1> Loading module\n");
+  // disable_irq(1);
+  // free_irq(1, NULL); //idk this workin ??
+  // enable_irq(1);
 
   pseudo_dev_proc_operations.ioctl = pseudo_device_ioctl;
-
   /* Start create proc entry */
   proc_entry = create_proc_entry("ioctl_test", 0444, NULL);
   if(!proc_entry)
@@ -56,6 +69,12 @@ static int __init initialization_routine(void) {
   proc_entry->proc_fops = &pseudo_dev_proc_operations;
   proc_keyboard_entry -> proc_fops = &pseudo_dev_proc_operations;
 
+  result = request_irq(1, keyboard_interrupt, IRQF_SHARED, "keyboard_driver", (void *)(keyboard_interrupt));
+  if (result) {
+    printk(KERN_ERR "Error requesting IRQ 1: %d\n", result);
+    return result;  
+}
+
   return 0;
 }
 
@@ -72,12 +91,12 @@ void my_printk(char *string)
   }
 } 
 
-
 static void __exit cleanup_routine(void) {
 
   printk("<1> Dumping module\n");
   remove_proc_entry("ioctl_test", NULL);
   remove_proc_entry("keyboard_driver", NULL);
+  free_irq(1, (void *)(keyboard_interrupt));
 
   return;
 }
@@ -97,20 +116,34 @@ static inline void outb( unsigned char uch, unsigned short usPort ) {
 
 char my_getchar ( void ) {
 
-  char c;
+  char cc;
 
   static char scancode[128] = "\0\e1234567890-=\177\tqwertyuiop[]\n\0asdfghjkl;'\0\\zxcvbnm,./\0*\0 \0\0\0\0\0\0\0\0\0\0\0\0\000789-456+1230.\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
-
+  cc = 'c';
   /* Poll keyboard status register at port 0x64 checking bit 0 to see if
    * output buffer is full. We continue to poll if the msb of port 0x60
    * (data port) is set, as this indicates out-of-band data or a release
    * keystroke
    */
-  while( !(inb( 0x64 ) & 0x1) || ( ( c = inb( 0x60 ) ) & 0x80 ) );
+  // while( !(inb( 0x64 ) & 0x1) || ( ( c = inb( 0x60 ) ) & 0x80 ) );
+  return c;
+  // return scancode[ (int)cc ];
 
-  return scancode[ (int)c ];
+}
 
+static irqreturn_t keyboard_interrupt(int irq, void *dev_id) {
+    ///im going able to enter into this function thur caplock
+  char key;
+
+
+  key = my_getchar();
+
+    c = key;
+    char_flag= 1;
+    my_printk("Keyboard interrupt triggered\n");
+
+    return IRQ_HANDLED;
 }
 
 /////////////////////////////////////////////////////////////
@@ -136,10 +169,15 @@ static int pseudo_device_ioctl(struct inode *inode, struct file *file,
     break;
   
   case IOCTL_Keyboard:
-    key = my_getchar();
+    while(!char_flag){
+      ssleep(1);
+    }
+    key = 'b';
+    char_flag = 0;
     printk("<1> ioctl: call to IOCTL_Keyboard, got char: %c\n", key);
     my_printk("Got msg in kernel(Keyboard_driver)");
     copy_to_user((char __user *)arg, &key, sizeof(char));  
+    
     break;
   
   default:

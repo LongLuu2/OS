@@ -16,18 +16,19 @@ int main() {
 
     printf("Waiting for a key press...\n");
 
-    while (1) {
-        ioctl(fd, IOCTL_Keyboard, &key);
+    // while (1) {
+    //     ioctl(fd, IOCTL_Keyboard, &key);
 
-        // Only print if the keypress is not '\0'
-        if (key != '\0') {
-            printf("Key pressed: %c\n", key);
-            break;
-        }
+    //     // Only print if the keypress is not '\0'
+    //     if (key != '\0') {
+    //         printf("Key pressed: %c\n", key);
+    //     }
 
-        // Sleep for a short time to avoid excessive CPU usage
-        usleep(100000);  // Sleep for 100ms
-    }
+    //     // Sleep for a short time to avoid excessive CPU usage
+    //     usleep(100000);  // Sleep for 100ms
+    // }
+    ioctl(fd, IOCTL_Keyboard, &key);
+    printf("Key pressed?: %c\n", key);
 
     close(fd);
     return 0;
